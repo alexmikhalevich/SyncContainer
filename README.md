@@ -1,2 +1,2 @@
 # SyncContainer
-The wrapper for STL containers which implements the possibility of thread-safe working with them.
+The wrapper for STL containers which implements the possibility of thread-safe working.
