@@ -1,7 +1,7 @@
-#include "csynccontainer.hpp"
 #include <vector>
+#include "ctest.h"
 
-int main() {
-	CSyncContainer< std::vector<int> > sync_vector;
-	return 0;
+int main(int argc, char** argv) {
+	::testing::InitGoogleTest(&argc, argv);
+	return RUN_ALL_TESTS();
 }
