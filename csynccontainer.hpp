@@ -2,10 +2,54 @@
 #include <mutex>
 #include <exception>
 #include <condition_variable>
+#include <iostream>
 
-struct empty_container : std::exception {
-	const char* what() const throw();
+class CException
+{
+	public:
+		virtual void PrintError() const = 0;
 };
+
+class CExEmptyContainer : public virtual CException
+{
+	public:
+		virtual void PrintError() const {
+			std::cerr << "Empty container" << std::endl;
+		}
+};
+
+template<class Container>
+auto Top(Container& container, int trash) -> decltype(container.top(), typename Container::value_type()) {
+	return container.top();
+}
+template<class Container>
+auto Top(Container& container, long trash) -> decltype(container.pop_back(), typename Container::value_type()) {
+	return container.back();
+}
+template<class Container>
+auto Top(Container& container, long long trash) -> decltype(container.pop(), typename Container::value_type()) {
+	return container.front();
+}
+template<class Container>
+auto Pop(Container& container, int trash) -> decltype(container.pop(), typename Container::value_type()) {
+	typename Container::value_type res = Top(container, 0);
+	container.pop();
+	return res;
+}
+template<class Container>
+auto Pop(Container& container, long trash) -> decltype(container.pop_back(), typename Container::value_type()) {
+	typename Container::value_type res = Top(container, 0);
+	container.pop_back();
+	return res;
+}
+template<class Container>
+auto Push(Container& container, typename Container::value_type value, long trash) -> decltype(container.pop_back(), void()) {
+	container.push_back(value);
+}
+template<class Container>
+auto Push(Container& container, typename Container::value_type value, int trash) -> decltype(container.pop(), void()) {
+	container.push(value);
+}
 
 template<class Container>
 class CSyncContainer {
@@ -14,29 +58,9 @@ class CSyncContainer {
 		Container  m_container;
 		mutable std::mutex m_mutex;
 		std::condition_variable m_empty;
-
-		auto Top(T& value, int trash) -> decltype(m_container.top(), void()) {
-			value =  m_container.top();
-		}
-		auto Top(T& value, long trash) -> decltype(m_container.front(), void()) {
-			value = m_container.front();
-		}
-		auto Pop(T& value, int trash) -> decltype(m_container.pop(), void()) {
-			Top(value, 0);
-			m_container.pop();
-		}
-		auto Pop(T& value, long trash) -> decltype(m_container.pop_front(), void()) {
-			Top(value, 0);
-			m_container.pop_front();
-		}
-		auto Push(T value, int trash) -> decltype(m_container.push(), void()) {
-			m_container.push(value);
-		}
-		auto Push(T value, long trash) -> decltype(m_container.push_front(), void()) {
-			m_container.push_front(value);
-		}
 	public:
 		CSyncContainer() {}
+		CSyncContainer(Container& container) : m_container(container) {}
 		CSyncContainer(const CSyncContainer& other) {
 			std::unique_lock<std::mutex> lock(other.m_mutex);
 			m_container = other.m_container;
@@ -45,20 +69,22 @@ class CSyncContainer {
 
 		void push(T value) {
 			std::unique_lock<std::mutex> lock(m_mutex);
-			Push(value, 0);
+			Push(m_container, value, 0);
+			m_empty.notify_one();
 		}
 		
-		void popNoSleep(T& value) {
+		T popNoSleep() {
 			std::unique_lock<std::mutex> lock(m_mutex);
-			if(m_container.empty()) throw empty_container();
-			value = m_container.
-			Pop(value, 0);
+			if(m_container.empty()) throw CExEmptyContainer();
+			T res = Pop(m_container, 0);
+			return res;
 		}
 
-		void popOrSleep(T& value) {
+		T popOrSleep() {
 			std::unique_lock<std::mutex> lock(m_mutex);
-			if(m_container.empty()) m_empty.wait(lock);
-			Pop(value, 0);
+			while(m_container.empty()) m_empty.wait(lock);
+			T res = Pop(m_container, 0);
+			return res;
 		}
 
 		bool empty() const {
